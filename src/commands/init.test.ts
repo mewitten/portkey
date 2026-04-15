@@ -1,62 +1,63 @@
 import { Command } from 'commander';
-import { initProject } from './init';
-import * as store from '../config/store';
-import * as profileManager from '../profiles/manager';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { registerInitCommands } from './init';
+import { loadConfig } from '../config/store';
 
-jest.mock('../config/store');
-jest.mock('../profiles/manager');
+function makeProgram() {
+  const program = new Command();
+  program.exitOverride();
+  registerInitCommands(program);
+  return program;
+}
 
-const mockEnsureConfigDir = store.ensureConfigDir as jest.MockedFunction<typeof store.ensureConfigDir>;
-const mockLoadConfig = store.loadConfig as jest.MockedFunction<typeof store.loadConfig>;
-const mockCreateProfile = profileManager.createProfile as jest.MockedFunction<typeof profileManager.createProfile>;
-const mockSwitchProfile = profileManager.switchProfile as jest.MockedFunction<typeof profileManager.switchProfile>;
+describe('init command', () => {
+  let tmpDir: string;
+  let originalHome: string | undefined;
 
-describe('initProject', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockEnsureConfigDir.mockReturnValue('/home/user/.portkey');
-    mockLoadConfig.mockReturnValue({ profiles: {}, activeProfile: null });
-    mockCreateProfile.mockReturnValue({ name: 'myapp', ports: {} });
-    mockSwitchProfile.mockReturnValue(undefined as any);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'portkey-init-test-'));
+    originalHome = process.env.HOME;
+    process.env.HOME = tmpDir;
   });
 
-  it('creates and switches to a new profile with given name', async () => {
-    await initProject({ name: 'myapp' });
-    expect(mockCreateProfile).toHaveBeenCalledWith('myapp', {});
-    expect(mockSwitchProfile).toHaveBeenCalledWith('myapp');
+  afterEach(() => {
+    process.env.HOME = originalHome;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('seeds default ports when --defaults flag is set', async () => {
-    await initProject({ name: 'myapp', defaults: true });
-    expect(mockCreateProfile).toHaveBeenCalledWith('myapp', {
-      frontend: 3000,
-      backend: 8080,
-      database: 5432,
-    });
+  it('should register the init command', () => {
+    const program = makeProgram();
+    const cmd = program.commands.find((c) => c.name() === 'init');
+    expect(cmd).toBeDefined();
   });
 
-  it('throws if profile already exists without --force', async () => {
-    mockLoadConfig.mockReturnValue({
-      profiles: { myapp: { name: 'myapp', ports: {} } },
-      activeProfile: 'myapp',
-    });
-    await expect(initProject({ name: 'myapp' })).rejects.toThrow(
-      'Profile "myapp" already exists. Use --force to overwrite.'
-    );
+  it('should create config file with default values on init', async () => {
+    const program = makeProgram();
+    await program.parseAsync(['node', 'portkey', 'init'], { from: 'user' });
+    const config = loadConfig();
+    expect(config).toBeDefined();
+    expect(config.version).toBe('1.0.0');
+    expect(config.ports).toBeDefined();
+    expect(config.activeProfile).toBe('default');
   });
 
-  it('overwrites existing profile when --force is set', async () => {
-    mockLoadConfig.mockReturnValue({
-      profiles: { myapp: { name: 'myapp', ports: {} } },
-      activeProfile: 'myapp',
-    });
-    await expect(initProject({ name: 'myapp', force: true })).resolves.not.toThrow();
-    expect(mockCreateProfile).toHaveBeenCalledWith('myapp', {});
+  it('should create default profile on init', async () => {
+    const program = makeProgram();
+    await program.parseAsync(['node', 'portkey', 'init'], { from: 'user' });
+    const config = loadConfig();
+    expect(config.profiles).toBeDefined();
+    expect(config.profiles['default']).toBeDefined();
   });
 
-  it('uses current directory name when no name is provided', async () => {
-    const dirName = require('path').basename(process.cwd());
-    await initProject({});
-    expect(mockCreateProfile).toHaveBeenCalledWith(dirName, {});
+  it('should not overwrite existing config without --force flag', async () => {
+    const program = makeProgram();
+    await program.parseAsync(['node', 'portkey', 'init'], { from: 'user' });
+    const config1 = loadConfig();
+    // Run init again without --force
+    await program.parseAsync(['node', 'portkey', 'init'], { from: 'user' });
+    const config2 = loadConfig();
+    expect(config2).toEqual(config1);
   });
 });
