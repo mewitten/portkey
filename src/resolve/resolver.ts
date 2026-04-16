@@ -8,25 +8,34 @@ export interface ResolvedPort {
 }
 
 export async function resolvePort(
-  portName: string,
+  nameOrAlias: string,
   profileName?: string
 ): Promise<ResolvedPort | null> {
   const config = await loadConfig();
   const activeProfile = profileName ?? config.activeProfile;
 
   if (!activeProfile) {
-    const entry = config.ports?.[portName];
-    if (entry == null) return null;
-    return { name: portName, port: entry, profile: 'default' };
+    return null;
   }
 
   const profile = await getProfile(activeProfile);
-  if (!profile) return null;
+  if (!profile) {
+    return null;
+  }
 
-  const port = profile.ports?.[portName];
-  if (port == null) return null;
+  const entry = profile.ports.find(
+    (p) => p.name === nameOrAlias || p.aliases?.includes(nameOrAlias)
+  );
 
-  return { name: portName, port, profile: activeProfile };
+  if (!entry) {
+    return null;
+  }
+
+  return {
+    name: entry.name,
+    port: entry.port,
+    profile: activeProfile,
+  };
 }
 
 export async function resolveAllPorts(
@@ -36,19 +45,17 @@ export async function resolveAllPorts(
   const activeProfile = profileName ?? config.activeProfile;
 
   if (!activeProfile) {
-    return Object.entries(config.ports ?? {}).map(([name, port]) => ({
-      name,
-      port: port as number,
-      profile: 'default',
-    }));
+    return [];
   }
 
   const profile = await getProfile(activeProfile);
-  if (!profile) return [];
+  if (!profile) {
+    return [];
+  }
 
-  return Object.entries(profile.ports ?? {}).map(([name, port]) => ({
-    name,
-    port: port as number,
+  return profile.ports.map((p) => ({
+    name: p.name,
+    port: p.port,
     profile: activeProfile,
   }));
 }
