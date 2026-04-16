@@ -47,3 +47,14 @@ export function saveConfig(config: PortkeyConfig): void {
     throw new Error(`Failed to save config: ${(err as Error).message}`);
   }
 }
+
+/**
+ * Updates specific fields in the config file without overwriting the entire config.
+ * Merges the provided partial config with the existing config before saving.
+ */
+export function updateConfig(partial: Partial<PortkeyConfig>): PortkeyConfig {
+  const current = loadConfig();
+  const updated = { ...current, ...partial };
+  saveConfig(updated);
+  return updated;
+}
