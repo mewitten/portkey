@@ -1,41 +1,34 @@
 import { Command } from 'commander';
-import * as fs from 'fs';
-import * as path from 'path';
 import { loadConfig } from '../config/store';
 import { generateEnvContent } from '../env/generator';
 
 export function registerEnvCommands(program: Command): void {
   program
     .command('env')
-    .description('Generate a .env file from the current port configuration')
-    .option('-o, --output <file>', 'output file path', '.env')
-    .option('-p, --prefix <prefix>', 'prefix for env variable names', '')
-    .option('--no-uppercase', 'do not uppercase variable names')
-    .option('--dry-run', 'print output without writing to file')
-    .action(async (options) => {
-      try {
-        const config = await loadConfig();
+    .description('Print environment variables for a profile as .env format')
+    .option('-p, --profile <name>', 'Profile to use (defaults to active profile)')
+    .option('-o, --output <file>', 'Write output to a file instead of stdout')
+    .action(async (options: { profile?: string; output?: string }) => {
+      const config = loadConfig();
 
-        const content = generateEnvContent(config, {
-          prefix: options.prefix,
-          uppercase: options.uppercase !== false,
-        });
+      const profileName = options.profile ?? config.activeProfile;
+      if (!profileName) {
+        throw new Error('No active profile set. Use --profile to specify one or run: portkey switch <profile>');
+      }
 
-        if (options.dryRun) {
-          console.log(content);
-          return;
-        }
+      const profile = config.profiles[profileName];
+      if (!profile) {
+        throw new Error(`Profile "${profileName}" not found.`);
+      }
 
-        const outputPath = path.resolve(process.cwd(), options.output);
-        fs.writeFileSync(outputPath, content, 'utf-8');
-        console.log(`✓ Environment file written to ${outputPath}`);
+      const content = generateEnvContent(profile.ports);
 
-        if (config.activeProfile) {
-          console.log(`  Using profile: ${config.activeProfile}`);
-        }
-      } catch (err: any) {
-        console.error(`Error generating env file: ${err.message}`);
-        process.exit(1);
+      if (options.output) {
+        const fs = await import('fs');
+        fs.writeFileSync(options.output, content, 'utf-8');
+        console.log(`Wrote env to ${options.output}`);
+      } else {
+        process.stdout.write(content);
       }
     });
 }
