@@ -21,6 +21,7 @@ Switches the active profile and applies its port assignments.
 |---|---|---|
 | `-e, --env-file <path>` | Path to write the `.env` file | `.env` |
 | `--no-env` | Skip writing the `.env` file | — |
+| `--dry-run` | Preview changes without applying them | — |
 
 **Examples:**
 
@@ -33,6 +34,9 @@ portkey use staging --env-file .env.staging
 
 # Switch profile without touching any env file
 portkey use production --no-env
+
+# Preview what would change without applying
+portkey use dev --dry-run
 ```
 
 ### `current`
@@ -54,3 +58,4 @@ portkey current
 - The active profile is persisted in the portkey config file (`~/.portkey/config.json` by default).
 - Use `portkey profile list` to see all available profiles.
 - Use `portkey profile add` to create a new profile.
+- If the specified profile does not exist, the command will exit with an error and leave the current profile unchanged.
