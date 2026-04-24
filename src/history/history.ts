@@ -1,65 +1,67 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getConfigPath } from '../config/store';
 
 export interface HistoryEntry {
   timestamp: string;
-  action: 'switch' | 'update' | 'delete' | 'create';
-  profile: string;
-  previous?: string;
-  details?: string;
+  fromProfile?: string;
+  toProfile: string;
+  note?: string;
 }
 
-const HISTORY_FILE = 'history.json';
-const MAX_HISTORY = 50;
-
-export function getHistoryPath(): string {
-  return path.join(path.dirname(getConfigPath()), HISTORY_FILE);
+export interface PortkeyConfig {
+  activeProfile: string;
+  profiles: Record<string, any>;
 }
 
-export function readHistory(): HistoryEntry[] {
-  const historyPath = getHistoryPath();
-  if (!fs.existsSync(historyPath)) {
-    return [];
-  }
+export function getHistoryPath(config: PortkeyConfig): string {
+  const configPath = getConfigPath();
+  return path.join(path.dirname(configPath), 'history.json');
+}
+
+export async function readHistory(config: PortkeyConfig): Promise<HistoryEntry[]> {
+  const historyPath = getHistoryPath(config);
   try {
-    const raw = fs.readFileSync(historyPath, 'utf-8');
+    const raw = await fs.readFile(historyPath, 'utf-8');
     return JSON.parse(raw) as HistoryEntry[];
   } catch {
     return [];
   }
 }
 
-export function writeHistory(entries: HistoryEntry[]): void {
-  const historyPath = getHistoryPath();
-  fs.writeFileSync(historyPath, JSON.stringify(entries, null, 2), 'utf-8');
+export async function writeHistory(config: PortkeyConfig, entries: HistoryEntry[]): Promise<void> {
+  const historyPath = getHistoryPath(config);
+  await fs.mkdir(path.dirname(historyPath), { recursive: true });
+  await fs.writeFile(historyPath, JSON.stringify(entries, null, 2), 'utf-8');
 }
 
-export function addHistoryEntry(
-  action: HistoryEntry['action'],
-  profile: string,
-  previous?: string,
-  details?: string
-): void {
-  const entries = readHistory();
+export async function addHistoryEntry(
+  config: PortkeyConfig,
+  toProfile: string,
+  fromProfile?: string,
+  note?: string
+): Promise<void> {
+  const entries = await readHistory(config);
   const entry: HistoryEntry = {
     timestamp: new Date().toISOString(),
-    action,
-    profile,
-    ...(previous !== undefined && { previous }),
-    ...(details !== undefined && { details }),
+    toProfile,
+    ...(fromProfile ? { fromProfile } : {}),
+    ...(note ? { note } : {}),
   };
   entries.unshift(entry);
-  const trimmed = entries.slice(0, MAX_HISTORY);
-  writeHistory(trimmed);
+  // Keep at most 500 entries
+  const trimmed = entries.slice(0, 500);
+  await writeHistory(config, trimmed);
 }
 
-export function clearHistory(): void {
-  writeHistory([]);
+export async function getRecentHistory(
+  config: PortkeyConfig,
+  limit = 20
+): Promise<HistoryEntry[]> {
+  const entries = await readHistory(config);
+  return entries.slice(0, limit);
 }
 
-export function getLastActive(): string | null {
-  const entries = readHistory();
-  const switchEntry = entries.find((e) => e.action === 'switch');
-  return switchEntry ? switchEntry.profile : null;
+export async function clearHistory(config: PortkeyConfig): Promise<void> {
+  await writeHistory(config, []);
 }
