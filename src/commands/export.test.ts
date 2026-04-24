@@ -11,6 +11,16 @@ function makeProgram(): Command {
   return program;
 }
 
+/** Suppress console.log for the duration of a callback, then restore it. */
+function withSilentLog(fn: () => void): void {
+  const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+  try {
+    fn();
+  } finally {
+    consoleSpy.mockRestore();
+  }
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   (exporter.exportConfig as jest.Mock).mockReturnValue('MOCK_OUTPUT');
@@ -19,32 +29,28 @@ beforeEach(() => {
 describe('export command', () => {
   it('calls exportConfig with default json format', () => {
     const program = makeProgram();
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-    program.parse(['export'], { from: 'user' });
+    withSilentLog(() => program.parse(['export'], { from: 'user' }));
     expect(exporter.exportConfig).toHaveBeenCalledWith(
       expect.objectContaining({ format: 'json' })
     );
-    consoleSpy.mockRestore();
   });
 
   it('passes profile option to exportConfig', () => {
     const program = makeProgram();
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-    program.parse(['export', '--profile', 'staging'], { from: 'user' });
+    withSilentLog(() => program.parse(['export', '--profile', 'staging'], { from: 'user' }));
     expect(exporter.exportConfig).toHaveBeenCalledWith(
       expect.objectContaining({ profile: 'staging' })
     );
-    consoleSpy.mockRestore();
   });
 
   it('passes output path to exportConfig', () => {
     const program = makeProgram();
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-    program.parse(['export', '--output', './out.env', '--format', 'env'], { from: 'user' });
+    withSilentLog(() =>
+      program.parse(['export', '--output', './out.env', '--format', 'env'], { from: 'user' })
+    );
     expect(exporter.exportConfig).toHaveBeenCalledWith(
       expect.objectContaining({ format: 'env', outputPath: './out.env' })
     );
-    consoleSpy.mockRestore();
   });
 
   it('prints error and exits on invalid format', () => {
