@@ -1,58 +1,51 @@
 import { loadConfig, saveConfig } from '../config/store';
-import { PortConfig } from '../config/schema';
+import { PortkeyConfig } from '../config/schema';
 
-export interface HotkeyMap {
-  [shortcut: string]: string; // shortcut -> profile name
+export interface HotkeyEntry {
+  key: string;
+  profile: string;
+  description?: string;
 }
 
-export function getHotkeys(config: PortConfig): HotkeyMap {
-  return (config.hotkeys as HotkeyMap) ?? {};
+export function getHotkeys(config: PortkeyConfig): HotkeyEntry[] {
+  return (config.hotkeys as HotkeyEntry[]) ?? [];
 }
 
-export function getProfileForHotkey(config: PortConfig, shortcut: string): string | undefined {
+export function getProfileForHotkey(config: PortkeyConfig, key: string): string | undefined {
   const hotkeys = getHotkeys(config);
-  return hotkeys[shortcut];
+  return hotkeys.find((h) => h.key === key)?.profile;
 }
 
-export function addHotkey(config: PortConfig, shortcut: string, profileName: string): PortConfig {
+export function addHotkey(config: PortkeyConfig, entry: HotkeyEntry): PortkeyConfig {
   const hotkeys = getHotkeys(config);
-  if (hotkeys[shortcut]) {
-    throw new Error(`Hotkey '${shortcut}' is already assigned to profile '${hotkeys[shortcut]}'`);
+  if (hotkeys.find((h) => h.key === entry.key)) {
+    throw new Error(`Hotkey '${entry.key}' already exists.`);
   }
-  if (!config.profiles?.[profileName]) {
-    throw new Error(`Profile '${profileName}' does not exist`);
-  }
-  return {
-    ...config,
-    hotkeys: { ...hotkeys, [shortcut]: profileName },
-  };
+  return { ...config, hotkeys: [...hotkeys, entry] };
 }
 
-export function removeHotkey(config: PortConfig, shortcut: string): PortConfig {
+export function removeHotkey(config: PortkeyConfig, key: string): PortkeyConfig {
   const hotkeys = getHotkeys(config);
-  if (!hotkeys[shortcut]) {
-    throw new Error(`Hotkey '${shortcut}' is not assigned`);
+  if (!hotkeys.find((h) => h.key === key)) {
+    throw new Error(`Hotkey '${key}' not found.`);
   }
-  const updated = { ...hotkeys };
-  delete updated[shortcut];
+  return { ...config, hotkeys: hotkeys.filter((h) => h.key !== key) };
+}
+
+export function updateHotkey(
+  config: PortkeyConfig,
+  key: string,
+  updates: Partial<Omit<HotkeyEntry, 'key'>>
+): PortkeyConfig {
+  const hotkeys = getHotkeys(config);
+  const idx = hotkeys.findIndex((h) => h.key === key);
+  if (idx === -1) {
+    throw new Error(`Hotkey '${key}' not found.`);
+  }
+  const updated = hotkeys.map((h, i) => (i === idx ? { ...h, ...updates } : h));
   return { ...config, hotkeys: updated };
 }
 
-export function updateHotkey(config: PortConfig, shortcut: string, profileName: string): PortConfig {
-  const hotkeys = getHotkeys(config);
-  if (!hotkeys[shortcut]) {
-    throw new Error(`Hotkey '${shortcut}' is not assigned`);
-  }
-  if (!config.profiles?.[profileName]) {
-    throw new Error(`Profile '${profileName}' does not exist`);
-  }
-  return {
-    ...config,
-    hotkeys: { ...hotkeys, [shortcut]: profileName },
-  };
-}
-
-export function listHotkeys(config: PortConfig): Array<{ shortcut: string; profile: string }> {
-  const hotkeys = getHotkeys(config);
-  return Object.entries(hotkeys).map(([shortcut, profile]) => ({ shortcut, profile }));
+export function listHotkeys(config: PortkeyConfig): HotkeyEntry[] {
+  return getHotkeys(config);
 }

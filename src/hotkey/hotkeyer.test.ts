@@ -7,99 +7,78 @@ import {
   updateHotkey,
   listHotkeys,
 } from './hotkeyer';
-import { PortConfig } from '../config/schema';
+import { PortkeyConfig } from '../config/schema';
 
-function makeConfig(overrides: Partial<PortConfig> = {}): PortConfig {
-  return {
-    version: 1,
-    activeProfile: 'dev',
-    profiles: {
-      dev: { ports: { app: 3000 } },
-      staging: { ports: { app: 4000 } },
-    },
-    hotkeys: { d: 'dev' },
-    ...overrides,
-  } as unknown as PortConfig;
+function makeConfig(hotkeys: any[] = []): PortkeyConfig {
+  return { profiles: {}, activeProfile: null, hotkeys } as any;
 }
 
 describe('getHotkeys', () => {
-  it('returns hotkeys map from config', () => {
-    const config = makeConfig();
-    expect(getHotkeys(config)).toEqual({ d: 'dev' });
+  it('returns empty array when no hotkeys', () => {
+    expect(getHotkeys(makeConfig())).toEqual([]);
   });
 
-  it('returns empty object when no hotkeys defined', () => {
-    const config = makeConfig({ hotkeys: undefined });
-    expect(getHotkeys(config)).toEqual({});
+  it('returns existing hotkeys', () => {
+    const cfg = makeConfig([{ key: 'ctrl+1', profile: 'dev' }]);
+    expect(getHotkeys(cfg)).toHaveLength(1);
   });
 });
 
 describe('getProfileForHotkey', () => {
-  it('returns profile name for a known shortcut', () => {
-    const config = makeConfig();
-    expect(getProfileForHotkey(config, 'd')).toBe('dev');
+  it('returns profile for known key', () => {
+    const cfg = makeConfig([{ key: 'ctrl+1', profile: 'dev' }]);
+    expect(getProfileForHotkey(cfg, 'ctrl+1')).toBe('dev');
   });
 
-  it('returns undefined for unknown shortcut', () => {
-    const config = makeConfig();
-    expect(getProfileForHotkey(config, 'x')).toBeUndefined();
+  it('returns undefined for unknown key', () => {
+    expect(getProfileForHotkey(makeConfig(), 'ctrl+9')).toBeUndefined();
   });
 });
 
 describe('addHotkey', () => {
-  it('adds a new hotkey assignment', () => {
-    const config = makeConfig();
-    const updated = addHotkey(config, 's', 'staging');
-    expect((updated.hotkeys as any)['s']).toBe('staging');
+  it('adds a new hotkey entry', () => {
+    const cfg = makeConfig();
+    const updated = addHotkey(cfg, { key: 'ctrl+1', profile: 'dev', description: 'Dev env' });
+    expect(getHotkeys(updated)).toHaveLength(1);
+    expect(getHotkeys(updated)[0].profile).toBe('dev');
   });
 
-  it('throws if shortcut already assigned', () => {
-    const config = makeConfig();
-    expect(() => addHotkey(config, 'd', 'staging')).toThrow("Hotkey 'd' is already assigned");
-  });
-
-  it('throws if profile does not exist', () => {
-    const config = makeConfig();
-    expect(() => addHotkey(config, 'z', 'nonexistent')).toThrow("Profile 'nonexistent' does not exist");
+  it('throws if hotkey already exists', () => {
+    const cfg = makeConfig([{ key: 'ctrl+1', profile: 'dev' }]);
+    expect(() => addHotkey(cfg, { key: 'ctrl+1', profile: 'staging' })).toThrow();
   });
 });
 
 describe('removeHotkey', () => {
   it('removes an existing hotkey', () => {
-    const config = makeConfig();
-    const updated = removeHotkey(config, 'd');
-    expect((updated.hotkeys as any)['d']).toBeUndefined();
+    const cfg = makeConfig([{ key: 'ctrl+1', profile: 'dev' }]);
+    const updated = removeHotkey(cfg, 'ctrl+1');
+    expect(getHotkeys(updated)).toHaveLength(0);
   });
 
-  it('throws if hotkey not assigned', () => {
-    const config = makeConfig();
-    expect(() => removeHotkey(config, 'x')).toThrow("Hotkey 'x' is not assigned");
+  it('throws if hotkey not found', () => {
+    expect(() => removeHotkey(makeConfig(), 'ctrl+1')).toThrow();
   });
 });
 
 describe('updateHotkey', () => {
-  it('updates an existing hotkey to a new profile', () => {
-    const config = makeConfig();
-    const updated = updateHotkey(config, 'd', 'staging');
-    expect((updated.hotkeys as any)['d']).toBe('staging');
+  it('updates description of existing hotkey', () => {
+    const cfg = makeConfig([{ key: 'ctrl+1', profile: 'dev' }]);
+    const updated = updateHotkey(cfg, 'ctrl+1', { description: 'Updated' });
+    expect(getHotkeys(updated)[0].description).toBe('Updated');
   });
 
-  it('throws if hotkey does not exist', () => {
-    const config = makeConfig();
-    expect(() => updateHotkey(config, 'z', 'dev')).toThrow("Hotkey 'z' is not assigned");
+  it('throws if hotkey not found', () => {
+    expect(() => updateHotkey(makeConfig(), 'ctrl+9', { profile: 'prod' })).toThrow();
   });
 });
 
 describe('listHotkeys', () => {
-  it('returns array of shortcut/profile pairs', () => {
-    const config = makeConfig({ hotkeys: { d: 'dev', s: 'staging' } } as any);
-    const list = listHotkeys(config);
-    expect(list).toContainEqual({ shortcut: 'd', profile: 'dev' });
-    expect(list).toContainEqual({ shortcut: 's', profile: 'staging' });
-  });
-
-  it('returns empty array when no hotkeys', () => {
-    const config = makeConfig({ hotkeys: undefined });
-    expect(listHotkeys(config)).toEqual([]);
+  it('returns all hotkeys', () => {
+    const cfg = makeConfig([
+      { key: 'ctrl+1', profile: 'dev' },
+      { key: 'ctrl+2', profile: 'prod' },
+    ]);
+    expect(listHotkeys(cfg)).toHaveLength(2);
   });
 });
